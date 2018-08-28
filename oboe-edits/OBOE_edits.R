@@ -32,6 +32,8 @@ copy_xml_nodeset <- function(source, nodeset_to_copy, destination_node ) {
 }	
 
 
+
+
 ### Create a dataframe to store the URI and label information from OBOE Core, Characteristics and Standards
 
 # Set counter for each ontology file's identifier starting number
@@ -51,7 +53,7 @@ for (ontology_file in ontology_file_list) {
 	#Read in ontology file as XML
 	ontology_file <- read_xml(ontology_file)
 	
-	# Sets the namespace for the Dublin Core elements
+	# Sets the namespace for the Dublin Core element
 	xml_attr(ontology_file, "xmlns:dcterms") <- "http://purl.org/dc/terms/"
 	
 	
@@ -100,16 +102,6 @@ for (ontology_file in ontology_file_list) {
 				{gsub('([[:upper:]])', ' \\1', .)} %>%
 				trimws()
 			
-			# Create a new, formatted label
-			new_label <- tolower(label)%>%
-				{ gsub('  ', ' ', .) } %>%
-				trimws()
-			
-			# Add the labels to the table
-			classes_df$original_label[row] <- label
-			classes_df$new_label[row] <- new_label
-
-			
 			# If there is no label
 		} else {
 			
@@ -117,7 +109,8 @@ for (ontology_file in ontology_file_list) {
 			label <- gsub( ".*#", "", as.character(xml_attrs(class_nodes[row]) ) ) %>%
 				{gsub('([[:upper:]])', ' \\1', .)} %>%
 				trimws()
-			
+		}
+		
 			# Create a new, formatted label
 			new_label <- tolower(label)%>%
 				{ gsub('  ', ' ', .) } %>%
@@ -127,7 +120,6 @@ for (ontology_file in ontology_file_list) {
 			classes_df$original_label[row] <- label
 			classes_df$new_label[row] <- new_label
 			
-		}
 		
 		### Create a numerical URI for each class
 		# If editing OBOE-Core
@@ -189,18 +181,11 @@ for (ontology_file in ontology_file_list) {
 		xml_add_child(class_node, read_xml(paste0('<dcterms:identifier>"', original_URI ,'"</dcterms:identifier>') ))
 		
 		
-		# Add an equivalent class node to existing classes in the ontology
-		xml_add_child(class_node, read_xml(paste0('<owl:equivalentClass><owl:Class>
-																								<owl:unionOf rdf:parseType="Collection">
-																									<rdf:Description rdf:about="', new_URI, '"/>
-																								</owl:unionOf>
-																							</owl:Class></owl:equivalentClass>') ))
-		
-		
 		#Create equivalent classes for the original OBOE classes, containing only the URI and rdfs:label			
 		equivalent_class <- xml_add_sibling(class_node, read_xml(paste0('<owl:Class rdf:about="', new_URI, '">
 																																		<rdfs:label xml:lang="en">',new_label,'</rdfs:label>
 		 																																</owl:Class>')))
+		
 		
 		# Copy the nodesets from the original class to the equivalent class
 		nodes_to_copy <- c("owl:equivalentClass", "owl:disjointWith", "rdfs:comment", "rdfs:subClassOf")
@@ -210,16 +195,16 @@ for (ontology_file in ontology_file_list) {
 		}
 		
 		
-		# Add an equivalentClass node containing the original URI to the classes containing numerical identifiers
-		xml_add_child(equivalent_class, read_xml(paste0('<owl:equivalentClass><owl:Class>																							
-																										<owl:unionOf rdf:parseType="Collection">
-																										<rdf:Description rdf:about="', original_URI, '"/>
-																										</owl:unionOf>
-																										</owl:Class></owl:equivalentClass>') ))
+		# Add an equivalentClass node to existing classes in the ontology
+		xml_add_child(class_node, read_xml(paste0('<owl:equivalentClass><owl:Class>
+																							<owl:unionOf rdf:parseType="Collection">
+																							<rdf:Description rdf:about="', new_URI, '"/>
+																							</owl:unionOf>
+																							</owl:Class></owl:equivalentClass>') ))
 		
 		
 		
-		# Replace all of the original URIs present in the classes containing the numerical identifiers with the new URIs
+		# Replace all of the original URIs (for class and object property names) present in the classes containing the numerical identifiers with the new URIs
 		new_equivalent_class <- as.character(equivalent_class)
 		
 		for (row in 1:nrow(classes_df)){
@@ -241,7 +226,12 @@ for (ontology_file in ontology_file_list) {
 			
 		equivalent_class <- xml_replace(equivalent_class, read_xml(new_equivalent_class) )
 	
-		
+		# Add an equivalentClass node containing the original URI to the classes containing numerical identifiers
+		xml_add_child(equivalent_class, read_xml(paste0('<owl:equivalentClass><owl:Class>																							
+																										<owl:unionOf rdf:parseType="Collection">
+																										<rdf:Description rdf:about="', original_URI, '"/>
+																										</owl:unionOf>
+																										</owl:Class></owl:equivalentClass>') ))
 
 		
 		
@@ -297,7 +287,7 @@ for (ontology_file in ontology_file_list) {
 		}
 		
 
-		### Replace all of the original URIs present in the object properties containing the numerical identifiers with the new URIs
+		### Replace all of the original URIs present in the object properties and classes containing the original identifiers with the new URIs
 		new_equivalent_object_property <- as.character(object_property)
 		
 		for (row in 1:nrow(object_properties_df)){
@@ -308,9 +298,16 @@ for (ontology_file in ontology_file_list) {
 			} 
 		}	
 		
+		for (row in 1:nrow(classes_df)){
+			
+			if(grepl(paste0("\\b",classes_df$original_URI[row], "\\b"), new_equivalent_object_property) ){
+				
+				new_equivalent_object_property <- gsub(paste0("\\b",classes_df$original_URI[row],"\\b"), classes_df$new_URI[row], new_equivalent_object_property)
+			}
+		}	
+		
 		equivalent_object_property <- xml_replace(equivalent_object_property, read_xml(new_equivalent_object_property) )
 		
-
 		
 		#Add an owl:equivalentProperty node to the equivalent object properties containing numerical identifiers
 		xml_add_child(equivalent_object_property, read_xml(paste0('<owl:equivalentProperty rdf:resource="', object_property_URI ,'"/>') ))
