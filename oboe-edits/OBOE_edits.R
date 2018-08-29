@@ -31,6 +31,32 @@ copy_xml_nodeset <- function(source, nodeset_to_copy, destination_node ) {
 	
 }	
 
+# Function for replacing the original URIs. The new_node is the nodeset containing the URIs that will be replaced. The classes_table is the
+# dataframe containing the class URIs. The object_properties_table is the dataframe containing the object property URIs.
+replace_original_URIs <- function(new_node, classes_table, object_properties_table ) {
+
+	temp_node <- as.character(new_node)
+
+	for (row in 1:nrow(classes_table)){
+	
+		if(grepl(paste0("\\b",classes_table[row, 1], "\\b"), temp_node) ){
+		
+			temp_node <- gsub(paste0("\\b",classes_table[row, 1],"\\b"), classes_table[row, 2], temp_node)
+		}
+	}	
+
+	for (row in 1:nrow(object_properties_table)){
+	
+		if(grepl(paste0("\\b",object_properties_table[row, 1], "\\b"), temp_node) ){
+		
+			temp_node <- gsub(paste0("\\b",object_properties_table[row, 1],"\\b"), object_properties_table[row, 2], temp_node)
+		} 
+	}	
+
+	new_node <- xml_replace(new_node, read_xml(temp_node) )
+
+}
+
 
 ### Create a dataframe to store the URI and label information from OBOE Core, Characteristics and Standards
 
@@ -207,28 +233,9 @@ for (ontology_file in ontology_file_list) {
 		
 		
 		
-		# Replace all of the original URIs (for class and object property names) present in the classes containing the numerical identifiers with the new URIs
-		new_equivalent_class <- as.character(equivalent_class)
-		
-		for (row in 1:nrow(classes_df)){
-				
-				if(grepl(paste0("\\b",classes_df$original_URI[row], "\\b"), new_equivalent_class) ){
-				
-					new_equivalent_class <- gsub(paste0("\\b",classes_df$original_URI[row],"\\b"), classes_df$new_URI[row], new_equivalent_class)
-				}
-		}	
-		
-		
-		for (row in 1:nrow(object_properties_df)){
-			
-			if(grepl(paste0("\\b",object_properties_df$object_property_URI[row], "\\b"), new_equivalent_class) ){
-				
-				new_equivalent_class <- gsub(paste0("\\b",object_properties_df$object_property_URI[row],"\\b"), object_properties_df$new_object_property_URI[row], new_equivalent_class)
-			} 
-		}	
-		
-			
-		equivalent_class <- xml_replace(equivalent_class, read_xml(new_equivalent_class) )
+		# Replace all of the original class and object property URIs in the numerical identifier classes with the new URIs
+		equivalent_class <- replace_original_URIs(equivalent_class, classes_df, object_properties_df)
+
 	
 		# Add an equivalentClass node containing the original URI to the classes containing numerical identifiers
 		xml_add_child(equivalent_class, read_xml(paste0('<owl:equivalentClass><owl:Class>																							
@@ -292,25 +299,7 @@ for (ontology_file in ontology_file_list) {
 		
 
 		### Replace all of the original URIs present in the object properties and classes containing the original identifiers with the new URIs
-		new_equivalent_object_property <- as.character(object_property)
-		
-		for (row in 1:nrow(object_properties_df)){
-			
-			if(grepl(paste0("\\b",object_properties_df$object_property_URI[row], "\\b"), new_equivalent_object_property) ){
-				
-				new_equivalent_object_property <- gsub(paste0("\\b",object_properties_df$object_property_URI[row],"\\b"), object_properties_df$new_object_property_URI[row], new_equivalent_object_property)
-			} 
-		}	
-		
-		for (row in 1:nrow(classes_df)){
-			
-			if(grepl(paste0("\\b",classes_df$original_URI[row], "\\b"), new_equivalent_object_property) ){
-				
-				new_equivalent_object_property <- gsub(paste0("\\b",classes_df$original_URI[row],"\\b"), classes_df$new_URI[row], new_equivalent_object_property)
-			}
-		}	
-		
-		equivalent_object_property <- xml_replace(equivalent_object_property, read_xml(new_equivalent_object_property) )
+		equivalent_object_property <- replace_original_URIs(equivalent_object_property, classes_df, object_properties_df)
 		
 		
 		#Add an owl:equivalentProperty node to the equivalent object properties containing numerical identifiers
