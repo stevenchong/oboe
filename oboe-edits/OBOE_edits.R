@@ -32,8 +32,6 @@ copy_xml_nodeset <- function(source, nodeset_to_copy, destination_node ) {
 }	
 
 
-
-
 ### Create a dataframe to store the URI and label information from OBOE Core, Characteristics and Standards
 
 # Set counter for each ontology file's identifier starting number
@@ -56,75 +54,80 @@ for (ontology_file in ontology_file_list) {
 	# Sets the namespace for the Dublin Core element
 	xml_attr(ontology_file, "xmlns:dcterms") <- "http://purl.org/dc/terms/"
 	
+
+	### Create dataframe for the Data Properties
+	data_properties_df <- xml_find_all(ontology_file, "//owl:DatatypeProperty[@rdf:about]") %>%
+		xml_attrs() %>% # get URIs
+		{ data.frame(matrix( unlist (.), byrow = TRUE), stringsAsFactors = FALSE ) } %>%
+		rename ( data_property_URI = 1) # rename first column
+	
+	# Create labels and new numerical URIs for the data properties, and add them to the dataframe
+	for (row in 1:nrow(data_properties_df)){
+		
+		data_properties_df$new_data_property_URI[row] <- paste0("http://ecoinformatics.org/oboe/oboe.1.2/oboe-core.owl_", str_pad(row + 100, 8, pad = "0") )
+		data_properties_df$data_property_label[row] <- gsub( ".*#", "", data_properties_df[row, 1]  )
+	}
+
 	
 	### Create dataframe for the object properties
-	# Get the object properties and create a dataframe
 	object_properties <- xml_find_all(ontology_file, "//owl:ObjectProperty[@rdf:about]")
 	
-	# Get the object property URIs
-	object_property_URIs <- xml_attrs(object_properties)
+	object_properties_df <- object_properties %>%
+		xml_attrs() %>%  # get URIs
+		{ data.frame(matrix( unlist (.), byrow = TRUE), stringsAsFactors = FALSE ) } %>%
+		rename ( object_property_URI = 1) # rename first column
 	
-	# Create the dataframe from the list of object property URIs
-	object_properties_df <- data.frame(matrix( unlist (object_property_URIs), byrow = TRUE), stringsAsFactors = FALSE ) %>%
-		rename (object_property_URI = matrix.unlist.object_property_URIs...byrow...TRUE.)
 	
-	# Create new numerical URIs for the object properties
+	# Create labels and new numerical URIs for the object properties, and add them to the dataframe
 	for (row in 1:nrow(object_properties_df)){
-		new_object_property_URI <- paste0("http://ecoinformatics.org/oboe/oboe.1.2/oboe-core.owl_", str_pad(row + 50, 8, pad = "0") )
-		object_properties_df$new_object_property_URI[row] <- new_object_property_URI
 		
-		object_property_label <- gsub( ".*#", "", object_property_URIs[row]  )
-		object_properties_df$object_property_label[row] <- object_property_label
+		object_properties_df$new_object_property_URI[row] <- paste0("http://ecoinformatics.org/oboe/oboe.1.2/oboe-core.owl_", str_pad(row + 50, 8, pad = "0") )
+		object_properties_df$object_property_label[row] <- gsub( ".*#", "", object_properties_df[row, 1]  )
 	}
+
 	
-	
-	### Create dataframe for the classes
-	# Get the classes and create a dataframe that maps old URIs and labels to their transformed equivalents
+	### Create dataframe for the classes that maps old URIs and labels to their transformed equivalents
 	class_nodes <- xml_find_all(ontology_file, "//owl:Class[@rdf:about]")
 	
+	classes_df <- class_nodes %>%
+		xml_attrs() %>%
+		{ data.frame(matrix( unlist (.), byrow = TRUE), stringsAsFactors = FALSE ) } %>%
+		rename ( original_URI = 1)
 	
-	# Get the URIs from the classes
-	original_URIs <- xml_attrs(class_nodes)
-	
-	# Create the dataframe from the list of URIs
-	classes_df <- data.frame(matrix( unlist (original_URIs), byrow = TRUE), stringsAsFactors = FALSE ) %>%
-		rename( original_URI = matrix.unlist.original_URIs...byrow...TRUE.  )
-	
-	
-	# Iterate through each class
 	for (row in 1:nrow(classes_df)){
-	
+		
 		#If the class has a label
 		if(	length (xml_find_all(class_nodes[row], "./rdfs:label" )) != 0 ) {
 			
 			# Extract the label text
-			label <- as.character(xml_find_first(class_nodes[row], "./rdfs:label/text()") ) %>%
-				{gsub('([[:upper:]])', ' \\1', .)} %>%
-				trimws()
+			label <- as.character(xml_find_first(class_nodes[row], "./rdfs:label/text()") )
 			
 			# If there is no label
 		} else {
 			
 			# Extract the text after the fragment identifier for each class
-			label <- gsub( ".*#", "", as.character(xml_attrs(class_nodes[row]) ) ) %>%
-				{gsub('([[:upper:]])', ' \\1', .)} %>%
-				trimws()
+			label <- gsub( ".*#", "", as.character(xml_attrs(class_nodes[row]) ) )
+			
 		}
 		
-			# Create a new, formatted label
-			new_label <- tolower(label)%>%
-				{ gsub('  ', ' ', .) } %>%
-				trimws()
-			
-			# Add the labels to the table
-			classes_df$original_label[row] <- label
-			classes_df$new_label[row] <- new_label
-			
+		# Clean the label text
+		label <- gsub('([[:upper:]])', ' \\1', label) %>%
+			trimws()
+		
+		# Create a new, formatted label
+		new_label <- tolower(label)%>%
+		  { gsub('  ', ' ', .) } %>%
+			trimws()
+		
+		# Add the labels to the table
+		classes_df$original_label[row] <- label
+		classes_df$new_label[row] <- new_label
+	
 		
 		### Create a numerical URI for each class
 		# If editing OBOE-Core
 		if (grepl("oboe-core", classes_df$original_URI[row], ignore.case = TRUE)) {
-
+			
 			new_URI <-	paste0("http://ecoinformatics.org/oboe/oboe.1.2/oboe-core.owl_",str_pad(oboe_core_counter, 8, pad = "0") ) 
 			oboe_core_counter <- oboe_core_counter + 1
 		}
@@ -145,15 +148,15 @@ for (ontology_file in ontology_file_list) {
 		
 		# Add the new URI to the table
 		classes_df$new_URI[row] <- new_URI
-	
+		
 	}
 	
 	# Reorder the columns in the table
-	classes_df <- select(classes_df, original_URI, original_label, new_URI, new_label)
-
+	classes_df <- select(classes_df, original_URI, new_URI, original_label, new_label)
 	
-	#Check if there is no rdfs:label annotation and use the fragment identifier to create one
-	# Iterate through the classes 
+	### Edit the OWL file
+	
+	#If there is no rdfs:label annotation property use the fragment identifier to create one
 	for (class_node in class_nodes){
 		
 		# Iterate through table
@@ -214,6 +217,7 @@ for (ontology_file in ontology_file_list) {
 					new_equivalent_class <- gsub(paste0("\\b",classes_df$original_URI[row],"\\b"), classes_df$new_URI[row], new_equivalent_class)
 				}
 		}	
+		
 		
 		for (row in 1:nrow(object_properties_df)){
 			
@@ -280,7 +284,7 @@ for (ontology_file in ontology_file_list) {
 		
 		
 		# Copy the nodesets from the original object property to its equivalent object property
-		nodes_to_copy <- c("rdf:type", "rdfs:domain", "rdfs:range", "rdfs:comment", "owl:inverseOf")
+		nodes_to_copy <- c("rdf:type", "rdfs:comment", "rdfs:domain", "rdfs:range", "owl:inverseOf")
 		
 		for (node in nodes_to_copy){
 			copy_xml_nodeset(object_property, node, equivalent_object_property)
