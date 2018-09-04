@@ -58,7 +58,7 @@ replace_original_URIs <- function(new_node, classes_table, object_properties_tab
 }
 
 
-### Create a dataframe to store the URI and label information from OBOE Core, Characteristics and Standards
+
 
 # Set counter for each ontology file's identifier starting number
 oboe_core_counter <- 1
@@ -79,10 +79,14 @@ for (ontology_file in ontology_file_list) {
 	
 	# Sets the namespace for the Dublin Core element
 	xml_attr(ontology_file, "xmlns:dcterms") <- "http://purl.org/dc/terms/"
-	
+
+	### Create dataframes to store the URI and label information from OBOE Core, Characteristics and Standards classes and properties
+		
 
 	### Create dataframe for the Data Properties
-	data_properties_df <- xml_find_all(ontology_file, "//owl:DatatypeProperty[@rdf:about]") %>%
+	data_properties <- xml_find_all(ontology_file, "//owl:DatatypeProperty[@rdf:about]")
+	
+	data_properties_df <- data_properties %>%
 		xml_attrs() %>% # get URIs
 		{ data.frame(matrix( unlist (.), byrow = TRUE), stringsAsFactors = FALSE ) } %>%
 		rename ( data_property_URI = 1) # rename first column
@@ -182,7 +186,7 @@ for (ontology_file in ontology_file_list) {
 	
 	### Edit the OWL file
 	
-	#If there is no rdfs:label annotation property use the fragment identifier to create one
+	#Iterate through the classes
 	for (class_node in class_nodes){
 		
 		# Iterate through table
@@ -320,6 +324,62 @@ for (ontology_file in ontology_file_list) {
 		xml_add_child(object_property, read_xml(paste0('<owl:equivalentProperty rdf:resource="', new_object_property_URI ,'"/>') ))
 		
 		}
+	
+######	
+	### Create equivalent data properties
+	for (data_property in data_properties){
+		for (row in 1:nrow(data_properties_df)){
+			
+			# Find the table row that matches the URI to get the correct labels and URIs
+			if (xml_attrs(data_property) == data_properties_df$data_property_URI[row] ) {
+				data_property_label <- data_properties_df$data_property_label[row]
+				data_property_URI <- data_properties_df$data_property_URI[row]
+				new_data_property_URI <- data_properties_df$new_data_property_URI[row]
+			}
+		}
+	
+		# Add in the dcterms:identifier to the original data properties
+		xml_add_child(data_property, read_xml(paste0('<dcterms:identifier>"', data_property_URI ,'"</dcterms:identifier>') ))	
+		
+		# Add a rdfs:label node to each data property node
+		xml_add_child(data_property, read_xml(paste0("<rdfs:label>", data_property_label, "</rdfs:label>") )) %>%
+		{ xml_attr(. , "xml:lang") <- "en"}  # add attribute for rdfs:label element
+		
+
+		
+		#Create equivalent data properties for the original data properties, containing only the URI and rdfs:label			
+		equivalent_data_property <- xml_add_sibling(data_property, read_xml(paste0('<owl:DatatypeProperty rdf:about="', new_data_property_URI, '">
+																																									 <rdfs:label xml:lang="en">',data_property_label,'</rdfs:label>
+																																									 </owl:DatatypeProperty>' )))
+		
+		# Copy the nodesets from the original data property to its equivalent data property
+		nodes_to_copy <- c("rdf:type", "rdfs:comment", "rdfs:domain", "rdfs:range")
+		
+		for (node in nodes_to_copy){
+			copy_xml_nodeset(data_property, node, equivalent_data_property)
+		}
+		
+		### Replace all of the original URIs present in the data properties and classes containing the original identifiers with the new URIs
+		equivalent_data_property <- replace_original_URIs(equivalent_data_property, classes_df, object_properties_df)
+		
+		#Add an owl:equivalentProperty node to the equivalent data properties containing numerical identifiers
+		xml_add_child(equivalent_data_property, read_xml(paste0('<owl:equivalentProperty rdf:resource="', data_property_URI ,'"/>') ))
+		
+		# Add a the dcterms:identifier annotation property to the equivalent data properties
+		xml_add_child(equivalent_data_property, read_xml(paste0('<dcterms:identifier>"', new_data_property_URI ,'"</dcterms:identifier>') ))
+		
+		# Add a rdfs:comment annotation property to existing data properties
+		xml_add_child(data_property, read_xml(paste0('<rdfs:comment>This data property is retained for legacy purposes. ', new_data_property_URI, 
+																									 ' is an equivalent data property that should be used instead.</rdfs:comment>' )))
+		
+		# Add a rdfs:comment annotation property to the equivalent data properties
+		xml_add_child(equivalent_data_property, read_xml(paste0('<rdfs:comment>It is recommended that this class is used in lieu of ', data_property_URI, 
+																															' for current and future applications. </rdfs:comment>')))
+		
+		#Add an owl:equivalentProperty node to the original data properties
+		xml_add_child(data_property, read_xml(paste0('<owl:equivalentProperty rdf:resource="', new_data_property_URI ,'"/>') ))
+		
+	}
 	
 	
 	#Create output file name	
