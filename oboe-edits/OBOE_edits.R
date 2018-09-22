@@ -30,31 +30,86 @@ copy_xml_nodeset <- function(source, nodeset_to_copy, destination_node ) {
 	
 }	
 
-#Function for replacing the original URIs. The new_node is the nodeset containing the URIs that will be replaced. The classes_table is the
-#  dataframe containing the class URIs. The object_properties_table is the dataframe containing the object property URIs.
-replace_original_URIs <- function(new_node, classes_table, object_properties_table ) {
 
-	temp_node <- as.character(new_node)
+#Function for replacing the original URIs in classes. The source is where the nodeset is located. The nodeset_to_check is the name of the top-level element
+#in the nodeset containing the class URIs to replace. The destination_node is the location of where to insert the nodeset, as a child node.
+replace_class_URIs <- function(source, nodeset_to_check, destination_node ) {
 
-	for (row in 1:nrow(classes_table)){
+	temp_nodeset <- xml_find_all(source, paste0("./", nodeset_to_check))
 	
-		if(grepl(paste0("\\b",classes_table[row, 1], "\\b"), temp_node) ){
+	for (child in temp_nodeset){
 		
-			temp_node <- gsub(paste0("\\b",classes_table[row, 1],"\\b"), classes_table[row, 2], temp_node)
+		child <- gsub("&oboe-core;", "http://ecoinformatics.org/oboe/oboe.1.2/oboe-core.owl#", child) %>%
+		{ gsub("&oboe-characteristics;", "http://ecoinformatics.org/oboe/oboe.1.2/oboe-characteristics.owl#", . ) } %>%
+		{ gsub("&oboe-standards;", "http://ecoinformatics.org/oboe/oboe.1.2/oboe-standards.owl#", . ) }
+		
+		for (counter in 1:nrow(combined_classes_df)){
+			if(grepl(paste0("\\b",combined_classes_df$original_URI[counter],"\\b"),child )){
+				
+				child	<- gsub(combined_classes_df$original_URI[counter], combined_classes_df$new_URI[counter], child)
+				
+			}
 		}
-	}	
-
-	for (row in 1:nrow(object_properties_table)){
-	
-		if(grepl(paste0("\\b",object_properties_table[row, 1], "\\b"), temp_node) ){
 		
-			temp_node <- gsub(paste0("\\b",object_properties_table[row, 1],"\\b"), object_properties_table[row, 2], temp_node)
-		} 
-	}	
-
-	new_node <- xml_replace(new_node, read_xml(temp_node) )
-
+		xml_add_child(destination_node, child)
+	}
+	
 }
+
+
+#Function for replacing the original URIs in object properties. The source is where the nodeset is located. The nodeset_to_check is the name of the top-level element
+#in the nodeset containing the object property URIs to replace. The destination_node is the location of where to insert the nodeset, as a child node.
+replace_object_property_URIs <- function(source, nodeset_to_check, destination_node ) {
+	
+	temp_nodeset <- xml_find_all(source, paste0("./", nodeset_to_check))
+	
+	for (child in temp_nodeset){
+		
+		child <- gsub("&oboe-core;", "http://ecoinformatics.org/oboe/oboe.1.2/oboe-core.owl#", child) %>%
+		{ gsub("&oboe-characteristics;", "http://ecoinformatics.org/oboe/oboe.1.2/oboe-characteristics.owl#", . ) } %>%
+		{ gsub("&oboe-standards;", "http://ecoinformatics.org/oboe/oboe.1.2/oboe-standards.owl#", . ) }
+		
+		
+		for (counter in 1:nrow(object_properties_df)){
+			if(grepl(paste0("\\b",object_properties_df$object_property_URI[counter],"\\b"),child )){
+				
+				child	<- gsub(object_properties_df$object_property_URI[counter], object_properties_df$new_object_property_URI[counter], child)
+				
+			}
+		}
+		
+		xml_add_child(destination_node, child)
+	}
+	
+}
+
+
+#Function for replacing the original URIs in data properties. The source is where the nodeset is located. The nodeset_to_check is the name of the top-level element
+#in the nodeset containing the object property URIs to replace. The destination_node is the location of where to insert the nodeset, as a child node.
+replace_data_property_URIs <- function(source, nodeset_to_check, destination_node ) {
+	
+	temp_nodeset <- xml_find_all(source, paste0("./", nodeset_to_check))
+	
+	for (child in temp_nodeset){
+		
+		child <- gsub("&oboe-core;", "http://ecoinformatics.org/oboe/oboe.1.2/oboe-core.owl#", child) %>%
+		{ gsub("&oboe-characteristics;", "http://ecoinformatics.org/oboe/oboe.1.2/oboe-characteristics.owl#", . ) } %>%
+		{ gsub("&oboe-standards;", "http://ecoinformatics.org/oboe/oboe.1.2/oboe-standards.owl#", . ) }
+		
+		
+		for (counter in 1:nrow(data_properties_df)){
+			if(grepl(paste0("\\b", data_properties_df$data_property_URI[counter],"\\b"),child )){
+				
+				child	<- gsub(data_properties_df$data_property_URI[counter], data_properties_df$new_data_property_URI[counter], child)
+				
+			}
+		}
+		
+		xml_add_child(destination_node, child)
+	}
+	
+}
+
 
 #Function for adding a dcterms:identifier node. The node is the location where the identifier will be added to. The URI is the identifier to display.
 add_identifier_node <- function (node, URI){
@@ -111,11 +166,8 @@ oboe_characteristics_counter <- 1
 combined_classes_list <- list()
 
 
-#ontology_file_list <- list.files(c( "oboe-characteristics.owl", "oboe-standards.owl", "oboe-core.owl"))
-
-
 #Read in list of OBOE files
-ontology_file_list <- list.files(full.names = TRUE, pattern = "oboe-", ignore.case = TRUE)
+ontology_file_list <- list.files(full.names = TRUE, pattern = "_oboe-", ignore.case = TRUE)
 
 for (i in 1:length(ontology_file_list)) {
 	
@@ -125,10 +177,6 @@ for (i in 1:length(ontology_file_list)) {
 	
 	#Read in ontology file as XML
 	ontology_file <- read_xml(ontology_file_list[i])
-	
-	
-	# Sets the namespace for the Dublin Core element
-	xml_attr(ontology_file, "xmlns:dcterms") <- "http://purl.org/dc/terms/"
 
 	
 	### Create dataframes to store the URI and label information from OBOE Core, Characteristics and Standards classes and properties
@@ -252,22 +300,38 @@ for (i in 1:length(ontology_file_list)) {
 # Combine the class dataframes
 combined_classes_df <- do.call(bind_rows, combined_classes_list)
 	
-	### Edit the OWL file
+
+### Edit each OWL file
+for (i in 1:length(ontology_file_list)) {	
+
+	#Get ontology file name
+	ontology_name <- basename(ontology_file_list[i])
+	
+	#Read in ontology file as XML
+	ontology_file <- read_xml(ontology_file_list[i])
+	
+	#Find all the classes in the OWL file
+	class_nodes <- xml_find_all(ontology_file, "//owl:Class[@rdf:about]")
+	
+	# Sets the namespace for the Dublin Core element
+	xml_attr(ontology_file, "xmlns:dcterms") <- "http://purl.org/dc/terms/"
+	
 	
 	#Iterate through the classes
 	for (class_node in class_nodes){
 		
 		# Iterate through table
-		for (row in 1:nrow (classes_df)){
+		for (row in 1:nrow (combined_classes_df)){
 			
 			# Find the table row that matches the URI to get the correct labels and URIs				
-			if (xml_attrs(class_node) == classes_df$original_URI[row] ) {
-				label	<- classes_df$original_label[row]	
-				original_URI <- classes_df$original_URI[row]
-				new_label <- classes_df$new_label[row]
-				new_URI <- classes_df$new_URI[row]
+			if (xml_attrs(class_node) == combined_classes_df$original_URI[row] ) {
+				label	<- combined_classes_df$original_label[row]	
+				original_URI <- combined_classes_df$original_URI[row]
+				new_label <- combined_classes_df$new_label[row]
+				new_URI <- combined_classes_df$new_URI[row]
 			} 
 		}
+		
 		
 		# If the URI contains a hashtag and the class doesn't have a label
 		if(grepl("#", xml_attrs(class_node) ) && length (xml_find_first(class_node, "./rdfs:label" )) == 0 ){
@@ -277,9 +341,11 @@ combined_classes_df <- do.call(bind_rows, combined_classes_list)
 			
 		}	
 		
+		
 		# Add the dcterms:identifier annotation property to existing classes
 		add_identifier_node(class_node, original_URI)
-		
+	
+
 		
 		#Create equivalent classes for the original OBOE classes, containing only the URI and rdfs:label			
 		equivalent_class <- xml_add_sibling(class_node, read_xml(paste0('<owl:Class rdf:about="', new_URI, '">
@@ -288,22 +354,65 @@ combined_classes_df <- do.call(bind_rows, combined_classes_list)
 
 		
 		# Copy the nodesets from the original class to the equivalent class
-		nodes_to_copy <- c("owl:equivalentClass", "owl:disjointWith", "rdfs:comment", "rdfs:subClassOf")
+		nodes_to_copy <- c("owl:equivalentClass",  "rdfs:comment")
 		
 		for (node in nodes_to_copy){
+			
 			copy_xml_nodeset(class_node, node, equivalent_class)
+		}
+		
+		# Replace original URIs in the owl:disjointWith nodes 
+		nodes_to_replace_URIs <- c("owl:disjointWith")
+		
+		for (node in nodes_to_replace_URIs){
+			
+			replace_class_URIs(class_node, node, equivalent_class)
 		}
 
 		
+		# Replace URIs in the subclass nodes, which have both object properties and classes
+		subclasses <- xml_find_all(class_node, "./rdfs:subClassOf") %>%
+		{	gsub("&oboe-core;", "http://ecoinformatics.org/oboe/oboe.1.2/oboe-core.owl#", .) }%>%
+		{ gsub("&oboe-characteristics;", "http://ecoinformatics.org/oboe/oboe.1.2/oboe-characteristics.owl#", . ) } %>%
+		{ gsub("&oboe-standards;", "http://ecoinformatics.org/oboe/oboe.1.2/oboe-standards.owl#", . ) }
+		
+		# Iterate through each subclass node in each class
+		for (subclass in subclasses) {
+			
+			for (counter in 1:nrow(combined_classes_df)){
+				if(grepl(paste0("\\b",combined_classes_df$original_URI[counter],"\\b"), subclass )){
+
+					subclass <- gsub(combined_classes_df$original_URI[counter],combined_classes_df$new_URI[counter], subclass)
+				} 
+			}
+
+			for (counter in 1:nrow(object_properties_df)){
+				
+				if(grepl(paste0("\\b",object_properties_df$object_property_URI[counter],"\\b"),subclass)){
+					
+					subclass <- gsub(object_properties_df$object_property_URI[counter], object_properties_df$new_object_property_URI[counter], subclass)
+				} 
+			}
+			
+			for (counter in 1:nrow(data_properties_df)){
+				
+				if(grepl(paste0("\\b",data_properties_df$data_property_URI[counter],"\\b"),subclass)){
+					
+					subclass <- gsub(data_properties_df$data_property_URI[counter], data_properties_df$new_data_property_URI[counter], subclass)
+				} 
+			}
+			
+			xml_add_child(equivalent_class , subclass)
+		}
+		
+	
 		# Add an equivalentClass node to existing classes in the ontology
 		add_equivalent_class_node(class_node, new_URI)
 		
-		# Replace all of the original class and object property URIs in the numerical identifier classes with the new URIs
-		equivalent_class <- replace_original_URIs(equivalent_class, classes_df, object_properties_df)
-
 			
 		# Add an equivalentClass node containing the original URI to the classes containing numerical identifiers
 		add_equivalent_class_node(equivalent_class, original_URI)
+		
 		
 		# Add a the dcterms:identifier annotation property to the equivalent classes
 		add_identifier_node(equivalent_class, new_URI)
@@ -314,13 +423,14 @@ combined_classes_df <- do.call(bind_rows, combined_classes_list)
 		# Add a rdfs:comment annotation property to existing classes
 		add_legacy_comment_node(class_node, "class", new_URI )
 	
-		
-				
-}
+		}
 
 	
 	### Create equivalent object properties
-	# Iterate through the object properties 
+	# Find all of the object properties in the OWL file
+	object_properties <- xml_find_all(ontology_file, "//owl:ObjectProperty[@rdf:about]")
+	
+	# Iterate through the object properties in each OWL file 
 	for (object_property in object_properties){
 	
 		for (row in 1:nrow(object_properties_df)){
@@ -347,16 +457,23 @@ combined_classes_df <- do.call(bind_rows, combined_classes_list)
 		
 		
 		# Copy the nodesets from the original object property to its equivalent object property
-		nodes_to_copy <- c("rdf:type", "rdfs:comment", "rdfs:domain", "rdfs:range", "owl:inverseOf")
+		nodes_to_copy <- c("rdf:type", "rdfs:comment" )
 		
 		for (node in nodes_to_copy){
 			copy_xml_nodeset(object_property, node, equivalent_object_property)
 		}
 		
-
-		### Replace all of the original URIs present in the object properties and classes containing the original identifiers with the new URIs
-		equivalent_object_property <- replace_original_URIs(equivalent_object_property, classes_df, object_properties_df)
+		# Replace the object property URIs in the owl:inverseOf fields in the object properties
+		replace_object_property_URIs(object_property, "owl:inverseOf", equivalent_object_property)
 		
+		# Replace the class URIs in the rdfs:domain and rdfs:range fields in the object properties
+		nodes_to_replace_URIs <- c("rdfs:domain", "rdfs:range")
+		
+		for (node in nodes_to_replace_URIs){
+			replace_class_URIs(object_property, node, equivalent_object_property)
+		}		
+		
+
 		#Add an owl:equivalentProperty node to the equivalent object properties containing numerical identifiers
 		add_equivalent_property_node(equivalent_object_property, object_property_URI)
 		
@@ -376,6 +493,10 @@ combined_classes_df <- do.call(bind_rows, combined_classes_list)
 	
 	
 	### Create equivalent data properties
+	# Find all of the data properties in the OWL file
+	data_properties <- xml_find_all(ontology_file, "//owl:DatatypeProperty[@rdf:about]")
+	
+	# Iterate through the data properties in each OWL file 
 	for (data_property in data_properties){
 		for (row in 1:nrow(data_properties_df)){
 			
@@ -399,14 +520,14 @@ combined_classes_df <- do.call(bind_rows, combined_classes_list)
 																																									 </owl:DatatypeProperty>' )))
 		
 		# Copy the nodesets from the original data property to its equivalent data property
-		nodes_to_copy <- c("rdf:type", "rdfs:comment", "rdfs:domain", "rdfs:range")
+		nodes_to_copy <- c("rdf:type", "rdfs:comment", "rdfs:range")
 		
 		for (node in nodes_to_copy){
 			copy_xml_nodeset(data_property, node, equivalent_data_property)
 		}
 		
-		### Replace all of the original URIs present in the data properties and classes containing the original identifiers with the new URIs
-		equivalent_data_property <- replace_original_URIs(equivalent_data_property, classes_df, object_properties_df)
+		### Replace the original class URIs present in the data properties and classes containing the original identifiers with the new URIs
+		replace_class_URIs(data_property, "rdfs:domain", equivalent_data_property )
 		
 		#Add an owl:equivalentProperty node to the equivalent data properties containing numerical identifiers
 		add_equivalent_property_node(equivalent_data_property, data_property_URI)
@@ -425,10 +546,15 @@ combined_classes_df <- do.call(bind_rows, combined_classes_list)
 		
 	}
 	
+	# Remove extra tags
+	ontology_file <- gsub("<<", "<", ontology_file) %>%
+		{ gsub(">/>", ">", .) } %>%
+		read_xml()
+	
 	
 	#Create output file name	
-	output_filename <- #list.files(full.names = TRUE, pattern = ontology_name, ignore.case = TRUE) %>%
-		ontology_name %>%
+	output_filename <- ontology_name %>%
+		{ gsub(".*_", "", . ) } %>%
 		{ gsub("\\.owl", "", .) } %>% #removes .owl file extension
 		{ gsub(" ", "_" , .) } %>% #replace spaces with "_"
 		{ paste0( . ,"_edited.owl" ) }
@@ -440,5 +566,6 @@ combined_classes_df <- do.call(bind_rows, combined_classes_list)
 	
 	# Create output OWL file
 	write_xml(ontology_file, file = file.path(paste0(getwd(), subDir), output_filename) )
-	
+
+}	
 
